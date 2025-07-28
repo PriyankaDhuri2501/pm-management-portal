@@ -4,6 +4,8 @@ import HOD from "../Models/hod.js";
 import Student from "../Models/students.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import dotenv from 'dotenv';
+dotenv.config();
 
 const register = async (req, res) => {
     try {
@@ -120,32 +122,76 @@ const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    // Validate input
+    if (!email || !password) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Email and password are required" 
+      });
+    }
+
     const user = await UserModel.findOne({ email });
     if (!user) {
-      return res.status(404).json({ success: false, message: "User Does Not Exist" });
+      return res.status(404).json({ 
+        success: false, 
+        message: "User not found" 
+      });
     }
 
     const isValidPassword = bcrypt.compareSync(password, user.password);
     if (!isValidPassword) {
-      return res.status(401).json({ success: false, message: "Invalid Password" });
+      return res.status(401).json({ 
+        success: false, 
+        message: "Invalid credentials" 
+      });
     }
 
-    const token = jwt.sign({ userId: user._id, role: user.role }, process.env.SECRETKEY, {
-      expiresIn: "1h",
+    // Verify SECRETKEY is available
+    if (!process.env.SECRETKEY) {
+      console.error("JWT Secret Key is not configured");
+      throw new Error("Server configuration error");
+    }
+
+    const token = jwt.sign(
+      { 
+        userId: user._id, 
+        role: user.role 
+      }, 
+      process.env.SECRETKEY, 
+      {
+        expiresIn: process.env.JWT_EXPIRES_IN || "1h",
+      }
+    );
+
+    // Set cookie
+    res.cookie("token", token, {
+      httpOnly: true,
+      sameSite: "Lax",
+      maxAge: 3600000, // 1 hour
     });
 
-    res.cookie("token", token, {
-  httpOnly: true,
-  sameSite: "Lax", // Use "None" only if on HTTPS
-  // secure: true, // ❌ REMOVE this line for localhost
-  maxAge: 3600000,
-});
+    // Omit sensitive data from response
+    const userResponse = {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      referenceId: user.referenceId
+    };
 
+    res.status(200).json({ 
+      success: true, 
+      message: "Logged in successfully", 
+      user: userResponse,
+      token 
+    });
 
-    res.status(200).json({ success: true, message: "Logged In Successfully", user, token });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Internal Server Error" });
-    console.error(error);
+    console.error("Login error:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || "Authentication failed" 
+    });
   }
 };
 

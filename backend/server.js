@@ -15,7 +15,6 @@ DbCon();
 
 const allowedOrigins = [
   "http://localhost:5173", // For local development
-  "https://rbac-frontend-bu6e.onrender.com" // For production
 ];
 
 // CORS configuration
